@@ -1,55 +1,66 @@
-package br.edu.iftm.rastreamento.service;
-
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
-import br.edu.iftm.rastreamento.dto.PacoteDTO;
-import br.edu.iftm.rastreamento.model.Endereco;
 import br.edu.iftm.rastreamento.model.Pacote;
-import br.edu.iftm.rastreamento.repository.EnderecoRepository;
+import br.edu.iftm.rastreamento.model.Rastreamento;
 import br.edu.iftm.rastreamento.repository.PacoteRepository;
-import br.edu.iftm.rastreamento.service.util.Converters;
+import br.edu.iftm.rastreamento.repository.RastreamentoRepository;
+import br.edu.iftm.rastreamento.service.exceptions.NaoAcheiException;
 
 @Service
 public class PacoteService {
-
     @Autowired
     private PacoteRepository pacoteRepository;
     @Autowired
-    private EnderecoRepository enderecoRepository;
-
-    @Autowired
-    private Converters converters;
-
-    public List<PacoteDTO> getAllPacotes() {
+    private RastreamentoRepository rastreamentoRepository;
+    public List<Pacote> getAllPacotes() {
         Iterable<Pacote> pacotesIterable = pacoteRepository.findAll();
         List<Pacote> pacotesList = new ArrayList<>();
         pacotesIterable.forEach(pacotesList::add);
-        return pacotesList.stream().map((pacote) -> converters.convertToDTO(pacote)).collect(Collectors.toList());
+        return pacotesList;
     }
 
-    public PacoteDTO getPacoteById(Long id) {
-        Pacote pacote = pacoteRepository.findById(id).get();
-        return converters.convertToDTO(pacote);
+    
+    public Pacote getPacoteById(Long id) {
+        return pacoteRepository.findById(id)
+                .orElseThrow(() -> new NaoAcheiException("Pacote não encontrado com o id: " + id));
     }
 
-    public PacoteDTO createPacote(PacoteDTO pacoteDTO) {
-        Endereco endereco = enderecoRepository.findById(pacoteDTO.getEndereco().getId()).get();
-        Pacote pacote = converters.convertToEntity(pacoteDTO);
-        pacote.setEndereco(endereco);
-        Pacote savedPacote = pacoteRepository.save(pacote);
-        return converters.convertToDTO(savedPacote);
+
+
+    public Pacote createPacote(Pacote pacote) {
+        return pacoteRepository.save(pacote);
     }
 
-    public PacoteDTO updatePacote(Long id, PacoteDTO pacoteDTO) {
-        Pacote pacote = converters.convertToEntity(pacoteDTO);
+    public Pacote updatePacote(Long id, Pacote pacoteDetails) {
+        Pacote pacote = pacoteRepository.findById(id)
+                .orElseThrow(() -> new NaoAcheiException("Pacote não encontrado com o id: " + id));
         pacote.setId(id);
-        Pacote updatedPacote = pacoteRepository.save(pacote);
-        return converters.convertToDTO(updatedPacote);
+        pacote.atualizarStatus(pacoteDetails.getStatus(), Date.from(Instant.now()), "não implementado");
+
+        if (!pacote.getRastreamentos().isEmpty()) {
+            Rastreamento ultiRastreamento = pacote.getRastreamentos().get(pacote.getRastreamentos().size() - 1);
+            rastreamentoRepository.save(ultiRastreamento);
+        }
+
+        return pacoteRepository.save(pacote);
     }
 
+    public void deletePacote(Long id) {
+        Pacote pacote = pacoteRepository.findById(id)
+                .orElseThrow(() -> new NaoAcheiException("Pacote não encontrado com o id: " + id));
+        pacoteRepository.delete(pacote);
+    }
+
+    public List<Pacote> getPacotesByStatus(String status) {
+        return pacoteRepository.findByStatus(status);
+    }
+
+    public List<Pacote> getPacotesByDestinatario(String destinatario) {
+        return pacoteRepository.findByDestinatario(destinatario);
+    }
 }
